@@ -3,7 +3,16 @@ import { type ZodError, ZodRealError } from "./errors.js";
 
 export type ZodSafeParseResult<T> = ZodSafeParseSuccess<T> | ZodSafeParseError<T>;
 export type ZodSafeParseSuccess<T> = { success: true; data: T; error?: never };
-export type ZodSafeParseError<T> = { success: false; data?: never; error: ZodError<T> };
+export type ZodSafeParseError<T> = {
+  success: false;
+  data?: never;
+  error: ZodError<T>;
+};
+
+export type ZodGreedySafeParseResult<T> =
+  | { success: true; partial: false; data: T; error?: never }
+  | { success: true; partial: true; data: unknown; error: ZodError }
+  | { success: false; data?: never; error: ZodError };
 
 export const parse: <T extends core.$ZodType>(
   schema: T,
@@ -31,6 +40,20 @@ export const safeParseAsync: <T extends core.$ZodType>(
   value: unknown,
   _ctx?: core.ParseContext<core.$ZodIssue>
 ) => Promise<ZodSafeParseResult<core.output<T>>> = /* @__PURE__ */ core._safeParseAsync(ZodRealError) as any;
+
+export const greedySafeParse: <T extends core.$ZodType>(
+  schema: T,
+  value: unknown,
+  _ctx?: core.ParseContext<core.$ZodIssue>
+) => ZodGreedySafeParseResult<core.output<T>> = /* @__PURE__ */ core._greedySafeParse(ZodRealError) as any;
+
+export const greedySafeParseAsync: <T extends core.$ZodType>(
+  schema: T,
+  value: unknown,
+  _ctx?: core.ParseContext<core.$ZodIssue>
+) => Promise<ZodGreedySafeParseResult<core.output<T>>> = /* @__PURE__ */ core._greedySafeParseAsync(
+  ZodRealError
+) as any;
 
 // Codec functions
 export const encode: <T extends core.$ZodType>(

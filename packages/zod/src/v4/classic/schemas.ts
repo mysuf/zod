@@ -65,6 +65,14 @@ export interface ZodType<
     data: unknown,
     params?: core.ParseContext<core.$ZodIssue>
   ) => Promise<parse.ZodSafeParseResult<core.output<this>>>;
+  greedySafeParse(
+    data: unknown,
+    params?: core.ParseContext<core.$ZodIssue>
+  ): parse.ZodGreedySafeParseResult<core.output<this>>;
+  greedySafeParseAsync(
+    data: unknown,
+    params?: core.ParseContext<core.$ZodIssue>
+  ): Promise<parse.ZodGreedySafeParseResult<core.output<this>>>;
 
   // encoding/decoding
   encode(data: core.output<this>, params?: core.ParseContext<core.$ZodIssue>): core.input<this>;
@@ -174,7 +182,11 @@ export const ZodType: core.$constructor<ZodType> = /*@__PURE__*/ core.$construct
         checks: [
           ...(def.checks ?? []),
           ...checks.map((ch) =>
-            typeof ch === "function" ? { _zod: { check: ch, def: { check: "custom" }, onattach: [] } } : ch
+            typeof ch === "function"
+              ? {
+                  _zod: { check: ch, def: { check: "custom" }, onattach: [] },
+                }
+              : ch
           ),
         ],
       }),
@@ -197,6 +209,8 @@ export const ZodType: core.$constructor<ZodType> = /*@__PURE__*/ core.$construct
   inst.parseAsync = async (data, params) => parse.parseAsync(inst, data, params, { callee: inst.parseAsync });
   inst.safeParseAsync = async (data, params) => parse.safeParseAsync(inst, data, params);
   inst.spa = inst.safeParseAsync;
+  inst.greedySafeParse = (data, params) => parse.greedySafeParse(inst, data, params);
+  inst.greedySafeParseAsync = async (data, params) => parse.greedySafeParseAsync(inst, data, params);
 
   // encoding/decoding
   inst.encode = (data, params) => parse.encode(inst, data, params);
@@ -1264,7 +1278,11 @@ export const ZodObject: core.$constructor<ZodObject> = /*@__PURE__*/ core.$const
   });
 
   inst.keyof = () => _enum(Object.keys(inst._zod.def.shape)) as any;
-  inst.catchall = (catchall) => inst.clone({ ...inst._zod.def, catchall: catchall as any as core.$ZodType }) as any;
+  inst.catchall = (catchall) =>
+    inst.clone({
+      ...inst._zod.def,
+      catchall: catchall as any as core.$ZodType,
+    }) as any;
   inst.passthrough = () => inst.clone({ ...inst._zod.def, catchall: unknown() });
   inst.loose = () => inst.clone({ ...inst._zod.def, catchall: unknown() });
   inst.strict = () => inst.clone({ ...inst._zod.def, catchall: never() });
@@ -2246,16 +2264,14 @@ export const ZodFunction: core.$constructor<ZodFunction> = /*@__PURE__*/ core.$c
 );
 
 export function _function(): ZodFunction;
-export function _function<const In extends ReadonlyArray<core.$ZodType>>(params: {
-  input: In;
-}): ZodFunction<ZodTuple<In, null>, core.$ZodFunctionOut>;
+export function _function<const In extends ReadonlyArray<core.$ZodType>>(params: { input: In }): ZodFunction<
+  ZodTuple<In, null>,
+  core.$ZodFunctionOut
+>;
 export function _function<
   const In extends ReadonlyArray<core.$ZodType>,
   const Out extends core.$ZodFunctionOut = core.$ZodFunctionOut,
->(params: {
-  input: In;
-  output: Out;
-}): ZodFunction<ZodTuple<In, null>, Out>;
+>(params: { input: In; output: Out }): ZodFunction<ZodTuple<In, null>, Out>;
 export function _function<const In extends core.$ZodFunctionIn = core.$ZodFunctionIn>(params: {
   input: In;
 }): ZodFunction<In, core.$ZodFunctionOut>;
@@ -2265,10 +2281,7 @@ export function _function<const Out extends core.$ZodFunctionOut = core.$ZodFunc
 export function _function<
   In extends core.$ZodFunctionIn = core.$ZodFunctionIn,
   Out extends core.$ZodType = core.$ZodType,
->(params?: {
-  input: In;
-  output: Out;
-}): ZodFunction<In, Out>;
+>(params?: { input: In; output: Out }): ZodFunction<In, Out>;
 export function _function(params?: {
   output?: core.$ZodType;
   input?: core.$ZodFunctionArgs | Array<core.$ZodType>;

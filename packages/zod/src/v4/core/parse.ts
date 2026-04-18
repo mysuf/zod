@@ -3,7 +3,9 @@ import * as errors from "./errors.js";
 import type * as schemas from "./schemas.js";
 import * as util from "./util.js";
 
-export type $ZodErrorClass = { new (issues: errors.$ZodIssue[]): errors.$ZodError };
+export type $ZodErrorClass = {
+  new (issues: errors.$ZodIssue[]): errors.$ZodError;
+};
 
 ///////////        METHODS       ///////////
 export type $Parse = <T extends schemas.$ZodType>(
@@ -92,6 +94,99 @@ export const _safeParseAsync: (_Err: $ZodErrorClass) => $SafeParseAsync = (_Err)
 };
 
 export const safeParseAsync: $SafeParseAsync = /* @__PURE__*/ _safeParseAsync(errors.$ZodRealError);
+
+/////////////////////////////////////////////////////
+//            G R E E D Y   P A R S E             //
+/////////////////////////////////////////////////////
+
+/**
+ * Result of `greedySafeParse` / `greedySafeParseAsync`.
+ *
+ * - `success: true, partial: false` — fully valid, no errors.
+ * - `success: true, partial: true`  — partially valid; `data` contains only
+ *   the fields/elements that passed, `error` lists everything that failed.
+ * - `success: false`                — hard failure (e.g. root type mismatch,
+ *   or an array where every element failed a `nonempty()` constraint).
+ */
+export type $GreedySafeParseResult<T> =
+  | { success: true; partial: false; data: T; error?: never }
+  | { success: true; partial: true; data: unknown; error: errors.$ZodError }
+  | { success: false; data?: never; error: errors.$ZodError };
+
+export type $GreedySafeParse = <T extends schemas.$ZodType>(
+  schema: T,
+  value: unknown,
+  _ctx?: schemas.ParseContext<errors.$ZodIssue>
+) => $GreedySafeParseResult<core.output<T>>;
+
+export const _greedySafeParse: (_Err: $ZodErrorClass) => $GreedySafeParse = (_Err) => (schema, value, _ctx) => {
+  const ctx: schemas.ParseContextInternal = _ctx
+    ? { ..._ctx, async: false, greedy: true }
+    : { async: false, greedy: true };
+  const result = schema._zod.run({ value, issues: [] }, ctx);
+  if (result instanceof Promise) {
+    throw new core.$ZodAsyncError();
+  }
+
+  if (result.greedyFailed) {
+    return {
+      success: false,
+      error: new (_Err ?? errors.$ZodError)(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
+    };
+  }
+  if (result.issues.length) {
+    return {
+      success: true,
+      partial: true,
+      data: result.value,
+      error: new (_Err ?? errors.$ZodError)(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
+    };
+  }
+  return {
+    success: true,
+    partial: false,
+    data: result.value as core.output<typeof schema>,
+  };
+};
+
+export const greedySafeParse: $GreedySafeParse = /* @__PURE__ */ _greedySafeParse(errors.$ZodRealError);
+
+export type $GreedySafeParseAsync = <T extends schemas.$ZodType>(
+  schema: T,
+  value: unknown,
+  _ctx?: schemas.ParseContext<errors.$ZodIssue>
+) => Promise<$GreedySafeParseResult<core.output<T>>>;
+
+export const _greedySafeParseAsync: (_Err: $ZodErrorClass) => $GreedySafeParseAsync =
+  (_Err) => async (schema, value, _ctx) => {
+    const ctx: schemas.ParseContextInternal = _ctx
+      ? { ..._ctx, async: true, greedy: true }
+      : { async: true, greedy: true };
+    let result = schema._zod.run({ value, issues: [] }, ctx);
+    if (result instanceof Promise) result = await result;
+
+    if (result.greedyFailed) {
+      return {
+        success: false,
+        error: new _Err(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
+      };
+    }
+    if (result.issues.length) {
+      return {
+        success: true,
+        partial: true,
+        data: result.value,
+        error: new _Err(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
+      };
+    }
+    return {
+      success: true,
+      partial: false,
+      data: result.value as core.output<typeof schema>,
+    };
+  };
+
+export const greedySafeParseAsync: $GreedySafeParseAsync = /* @__PURE__ */ _greedySafeParseAsync(errors.$ZodRealError);
 
 // Codec functions
 export type $Encode = <T extends schemas.$ZodType>(

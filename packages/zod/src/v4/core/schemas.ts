@@ -22,6 +22,13 @@ export interface ParseContext<T extends errors.$ZodIssueBase = never> {
   readonly jitless?: boolean;
   /** Abort validation after the first error. Default `false`. */
   // readonly abortEarly?: boolean;
+  /**
+   * When true, parse as many fields/elements as possible instead of failing on
+   * the first error. Failed optional fields are omitted from the output. Failed
+   * array elements are stripped from the output. Errors are collected and
+   * returned alongside the partial result via `greedySafeParse`.
+   */
+  readonly greedy?: boolean;
 }
 
 /** @internal */
@@ -36,6 +43,13 @@ export interface ParsePayload<T = unknown> {
   issues: errors.$ZodRawIssue[];
   /** A way to mark a whole payload as aborted. Used in codecs/pipes. */
   aborted?: boolean;
+  /**
+   * @internal Set by greedy array parse when every element failed AND the
+   * schema requires a non-empty array (minLength >= 1). Signals to
+   * `greedySafeParse` that this should be treated as a hard failure even in
+   * greedy mode.
+   */
+  greedyFailed?: boolean;
 }
 
 export type CheckFn<T> = (input: ParsePayload<T>) => util.MaybeAsync<void>;
@@ -1623,7 +1637,54 @@ export const $ZodArray: core.$constructor<$ZodArray> = /*@__PURE__*/ core.$const
         input,
         inst,
       });
+      // In greedy mode a root type mismatch is always a hard failure — there
+      // is no array to salvage partial elements from.
+      if (ctx?.greedy) payload.greedyFailed = true;
       return payload;
+    }
+
+    if (ctx?.greedy) {
+      // Greedy path: strip invalid elements, collect errors, return compact array.
+      payload.value = [] as any[];
+      let stripped = false;
+      const proms: Promise<any>[] = [];
+
+      const handleGreedyResult = (result: ParsePayload<any>, final: ParsePayload<any[]>, originalIndex: number) => {
+        if (result.issues.length) {
+          final.issues.push(...util.prefixIssues(originalIndex, result.issues));
+          stripped = true;
+        } else {
+          (final.value as any[]).push(result.value);
+        }
+      };
+
+      for (let i = 0; i < input.length; i++) {
+        const result = def.element._zod.run({ value: input[i], issues: [] }, ctx);
+        if (result instanceof Promise) {
+          proms.push(result.then((r) => handleGreedyResult(r, payload, i)));
+        } else {
+          handleGreedyResult(result, payload, i);
+        }
+      }
+
+      const finalizeGreedy = () => {
+        // Mark hard failure when the output array is empty (either because the
+        // input was already empty, or all elements were stripped) AND the schema
+        // requires at least one entry.  The min-length check still runs normally
+        // on the compact array to produce the appropriate too_small error.
+        if ((payload.value as any[]).length === 0) {
+          const minimum = (inst._zod.bag as any)?.minimum as number | undefined;
+          if (minimum != null && minimum >= 1) {
+            payload.greedyFailed = true;
+          }
+        }
+        return payload;
+      };
+
+      if (proms.length) {
+        return Promise.all(proms).then(finalizeGreedy);
+      }
+      return finalizeGreedy();
     }
 
     payload.value = Array(input.length);
@@ -1727,7 +1788,8 @@ function handlePropertyResult(
   final: ParsePayload,
   key: PropertyKey,
   input: any,
-  isOptionalOut: boolean
+  isOptionalOut: boolean,
+  greedy?: boolean
 ) {
   if (result.issues.length) {
     // For optional-out schemas, ignore errors on absent keys
@@ -1735,6 +1797,16 @@ function handlePropertyResult(
       return;
     }
     final.issues.push(...util.prefixIssues(key, result.issues));
+    if (greedy) {
+      // Omit the field only when the value is completely unusable:
+      // - greedyFailed: schema explicitly signalled a hard failure (e.g. all
+      //   array elements stripped with nonempty constraint, or root type mismatch)
+      // - value unchanged: the schema pushed a type error without producing a new
+      //   value, meaning there is nothing to salvage (scalar / wrong root type).
+      // Partial structures (objects, arrays) replace payload.value with a new
+      // collection, so result.value !== input[key] and they fall through.
+      if (result.greedyFailed || result.value === input[key]) return;
+    }
   }
 
   if (result.value === undefined) {
@@ -1746,7 +1818,10 @@ function handlePropertyResult(
   }
 }
 
-export type $ZodObjectConfig = { out: Record<string, unknown>; in: Record<string, unknown> };
+export type $ZodObjectConfig = {
+  out: Record<string, unknown>;
+  in: Record<string, unknown>;
+};
 
 export type $loose = {
   out: Record<string, unknown>;
@@ -1837,9 +1912,9 @@ function handleCatchall(
     const r = _catchall.run({ value: input[key], issues: [] }, ctx);
 
     if (r instanceof Promise) {
-      proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, isOptionalOut)));
+      proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, isOptionalOut, ctx.greedy)));
     } else {
-      handlePropertyResult(r, payload, key, input, isOptionalOut);
+      handlePropertyResult(r, payload, key, input, isOptionalOut, ctx.greedy);
     }
   }
 
@@ -1907,6 +1982,8 @@ export const $ZodObject: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$con
         input,
         inst,
       });
+      // In greedy mode a root type mismatch is always a hard failure.
+      if (ctx?.greedy) payload.greedyFailed = true;
       return payload;
     }
 
@@ -1921,9 +1998,9 @@ export const $ZodObject: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$con
 
       const r = el._zod.run({ value: input[key], issues: [] }, ctx);
       if (r instanceof Promise) {
-        proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, isOptionalOut)));
+        proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, isOptionalOut, ctx?.greedy)));
       } else {
-        handlePropertyResult(r, payload, key, input, isOptionalOut);
+        handlePropertyResult(r, payload, key, input, isOptionalOut, ctx?.greedy);
       }
     }
 
@@ -2040,10 +2117,12 @@ export const $ZodObjectJIT: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$
           input,
           inst,
         });
+        // In greedy mode a root type mismatch is always a hard failure.
+        if (ctx?.greedy) payload.greedyFailed = true;
         return payload;
       }
 
-      if (jit && fastEnabled && ctx?.async === false && ctx.jitless !== true) {
+      if (jit && fastEnabled && ctx?.async === false && ctx.jitless !== true && !ctx.greedy) {
         // always synchronous
         if (!fastpass) fastpass = generateFastpass(def.shape);
         payload = fastpass(payload, ctx);
@@ -3216,7 +3295,11 @@ export const $ZodLiteral: core.$constructor<$ZodLiteral> = /*@__PURE__*/ core.$c
 //////////////////////////////////////////
 
 // provide a fallback in case the File interface isn't provided in the environment
-type _File = typeof globalThis extends { File: infer F extends new (...args: any[]) => any } ? InstanceType<F> : {};
+type _File = typeof globalThis extends {
+  File: infer F extends new (...args: any[]) => any;
+}
+  ? InstanceType<F>
+  : {};
 /** Do not reference this directly. */
 export interface File extends _File {
   readonly type: string;
