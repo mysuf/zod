@@ -29,15 +29,17 @@ export {
   util,
   NEVER,
 } from "../core/index.js";
-export { toJSONSchema } from "../core/json-schema-processors.js";
-export { fromJSONSchema } from "./from-json-schema.js";
-
-export * as locales from "../locales/index.js";
+// toJSONSchema, fromJSONSchema and locales barrel omitted — import from "zod/locales" directly
 
 // iso
 // must be exported from top-level
 // https://github.com/colinhacks/zod/issues/4491
-export { ZodISODateTime, ZodISODate, ZodISOTime, ZodISODuration } from "./iso.js";
+export {
+  ZodISODateTime,
+  ZodISODate,
+  ZodISOTime,
+  ZodISODuration,
+} from "./iso.js";
 export * as iso from "./iso.js";
 
 // coerce

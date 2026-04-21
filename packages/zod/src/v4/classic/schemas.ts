@@ -1085,6 +1085,20 @@ export function unknown(): ZodUnknown {
   return core._unknown(ZodUnknown);
 }
 
+// ZodRaw — passthrough that marks a subtree as owned by a child SchemaTag class.
+// Functionally identical to ZodUnknown (accepts any input, returns it unchanged) but
+// semantically signals "do not validate here; the child class constructor is responsible."
+export interface ZodRaw extends _ZodType<core.$ZodUnknownInternals> {}
+export const ZodRaw: core.$constructor<ZodRaw> = /*@__PURE__*/ core.$constructor("ZodRaw", (inst, def) => {
+  core.$ZodUnknown.init(inst, def);
+  ZodType.init(inst, def);
+  inst._zod.processJSONSchema = (ctx, json, params) => processors.unknownProcessor(inst, ctx, json, params);
+});
+
+export function raw(): ZodRaw {
+  return core._unknown(ZodRaw) as unknown as ZodRaw;
+}
+
 // ZodNever
 export interface ZodNever extends _ZodType<core.$ZodNeverInternals> {}
 export const ZodNever: core.$constructor<ZodNever> = /*@__PURE__*/ core.$constructor("ZodNever", (inst, def) => {

@@ -10,9 +10,15 @@ export type ZodSafeParseError<T> = {
 };
 
 export type ZodGreedySafeParseResult<T> =
-  | { success: true; partial: false; data: T; error?: never }
-  | { success: true; partial: true; data: unknown; error: ZodError }
-  | { success: false; data?: never; error: ZodError };
+  | { success: true; partial: false; data: T; error?: never; warnings?: never }
+  | {
+      success: true;
+      partial: true;
+      data: unknown;
+      warnings: ZodError;
+      error?: never;
+    }
+  | { success: false; data?: never; error: ZodError; warnings?: never };
 
 export const parse: <T extends core.$ZodType>(
   schema: T,

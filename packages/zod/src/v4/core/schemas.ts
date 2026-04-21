@@ -1646,13 +1646,11 @@ export const $ZodArray: core.$constructor<$ZodArray> = /*@__PURE__*/ core.$const
     if (ctx?.greedy) {
       // Greedy path: strip invalid elements, collect errors, return compact array.
       payload.value = [] as any[];
-      let stripped = false;
       const proms: Promise<any>[] = [];
 
       const handleGreedyResult = (result: ParsePayload<any>, final: ParsePayload<any[]>, originalIndex: number) => {
         if (result.issues.length) {
           final.issues.push(...util.prefixIssues(originalIndex, result.issues));
-          stripped = true;
         } else {
           (final.value as any[]).push(result.value);
         }

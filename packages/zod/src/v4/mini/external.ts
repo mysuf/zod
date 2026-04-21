@@ -21,9 +21,7 @@ export {
   util,
   NEVER,
 } from "../core/index.js";
-export { toJSONSchema } from "../core/json-schema-processors.js";
-
-export * as locales from "../locales/index.js";
+// toJSONSchema and locales barrel omitted — import from "zod/locales" directly
 /** A special constant with type `never` */
 // export const NEVER = {} as never;
 
