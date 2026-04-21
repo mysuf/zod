@@ -1,6 +1,7 @@
 import { expect, expectTypeOf, test } from "vitest";
 
 import * as z from "zod/v4";
+import { toJSONSchema } from "../../core/json-schema-processors.js";
 
 test("basic apply (object)", () => {
   const schema = z
@@ -11,7 +12,7 @@ test("basic apply (object)", () => {
     .apply((s) => s.omit({ b: true }))
     .apply((s) => s.extend({ c: z.boolean() }));
 
-  expect(z.toJSONSchema(schema)).toMatchInlineSnapshot(`
+  expect(toJSONSchema(schema)).toMatchInlineSnapshot(`
     {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,

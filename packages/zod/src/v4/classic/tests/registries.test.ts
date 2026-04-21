@@ -1,5 +1,6 @@
 import { expect, expectTypeOf, test } from "vitest";
 import * as z from "zod/v4";
+import { toJSONSchema } from "../../core/json-schema-processors.js";
 
 test("globalRegistry", () => {
   const reg = z.registry();
@@ -226,7 +227,7 @@ test("toJSONSchema throws on duplicate id across different schemas", () => {
 
   const wrapper = z.object({ a, b });
 
-  expect(() => z.toJSONSchema(wrapper, { metadata: reg })).toThrow(
+  expect(() => toJSONSchema(wrapper, { metadata: reg })).toThrow(
     'Duplicate schema id "duplicate-id" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.'
   );
 });
@@ -238,6 +239,6 @@ test("toJSONSchema allows same schema with same id", () => {
   const wrapper = z.object({ a: shared, b: shared });
 
   // Should not throw - same schema instance used twice
-  const result = z.toJSONSchema(wrapper, { metadata: reg });
+  const result = toJSONSchema(wrapper, { metadata: reg });
   expect(result.$defs?.["shared-id"]).toBeDefined();
 });

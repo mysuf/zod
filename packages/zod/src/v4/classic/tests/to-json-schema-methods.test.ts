@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest";
 import * as z from "zod/v4";
+import { toJSONSchema } from "../../core/json-schema-processors.js";
 
 // Utility functions
 function expectMethodMatch(schema: z.ZodType, params?: z.core.ToJSONSchemaParams): void {
-  const staticResult = z.toJSONSchema(schema, params);
+  const staticResult = toJSONSchema(schema, params);
   const methodResult = schema.toJSONSchema(params);
   expect(methodResult).toEqual(staticResult);
 }
@@ -403,7 +404,7 @@ describe("toJSONSchema method", () => {
         },
       });
       // Both should throw the same error
-      expect(() => z.toJSONSchema(schema, { cycles: "throw" })).toThrow();
+      expect(() => toJSONSchema(schema, { cycles: "throw" })).toThrow();
       expect(() => schema.toJSONSchema({ cycles: "throw" })).toThrow();
     });
 

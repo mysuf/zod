@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import type { StandardSchemaWithJSON } from "../../core/standard-schema.js";
 import * as z from "../index.js";
+import { toJSONSchema } from "../../core/json-schema-processors.js";
 
 function acceptSchema(schema: StandardSchemaWithJSON) {
   return schema;
@@ -22,7 +23,7 @@ test("toJSONSchema result ~standard.jsonSchema works with objects", () => {
     lastName: z.string(),
   });
 
-  const jsonSchema = z.toJSONSchema(schema);
+  const jsonSchema = toJSONSchema(schema);
 
   // Call ~standard.jsonSchema.input - this should not throw
   const inputSchema = jsonSchema["~standard"].jsonSchema.input({ target: "draft-07" });

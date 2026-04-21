@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import * as z from "zod/v4";
+import { toJSONSchema } from "../../core/json-schema-processors.js";
 
 test("length checks", async () => {
   const schema = z.string();
@@ -107,12 +108,12 @@ test(".toJSONSchema() returns StandardJSONSchemaV1", async () => {
 	`);
 });
 
-test("z.toJSONSchema() returns StandardJSONSchemaV1", async () => {
+test("toJSONSchema() returns StandardJSONSchemaV1", async () => {
   const codec = z.codec(z.string(), z.number(), {
     decode: (str) => Number.parseFloat(str),
     encode: (num) => num.toString(),
   });
-  const result = z.toJSONSchema(codec);
+  const result = toJSONSchema(codec);
   expect(result["~standard"].validate).toBeTypeOf("function");
   expect(await result["~standard"].validate("42")).toMatchInlineSnapshot(`
 		{

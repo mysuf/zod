@@ -1,8 +1,9 @@
 import { expect, test } from "vitest";
 import * as z from "zod/v4";
+import uz from "../../../locales/uz.js";
 
 test("locales - uz", () => {
-  z.config(z.locales.uz());
+  z.config(uz());
 
   const invalidType = z.number().safeParse("a");
   expect(invalidType.error!.issues[0].code).toBe("invalid_type");

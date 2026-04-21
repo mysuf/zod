@@ -1,11 +1,12 @@
 import { expect, test } from "vitest";
 import * as z from "zod/v4";
+import ka from "../../locales/ka.js";
 
 test("Georgian locale uses 'ველი' instead of 'სტრინგი'", () => {
   // Save original error map to restore later if needed, though tests are usually isolated or we can reset
   // const originalErrorMap = z.getErrorMap(); // z.getErrorMap might not exist, but let's assume isolation or just set it
 
-  z.setErrorMap(z.locales.ka().localeError);
+  z.setErrorMap(ka().localeError);
 
   // Test 1: Invalid type (Expected string, received number)
   const stringSchema = z.string();
