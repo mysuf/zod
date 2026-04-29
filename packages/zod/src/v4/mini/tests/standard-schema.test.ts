@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
+import { toJSONSchema } from "../../core/json-schema-processors.js";
 import type { StandardSchemaWithJSON } from "../../core/standard-schema.js";
 import * as z from "../index.js";
-import { toJSONSchema } from "../../core/json-schema-processors.js";
 
 function acceptSchema(schema: StandardSchemaWithJSON) {
   return schema;

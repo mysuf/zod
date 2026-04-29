@@ -109,15 +109,14 @@ export const safeParseAsync: $SafeParseAsync = /* @__PURE__*/ _safeParseAsync(er
  *   or an array where every element failed a `nonempty()` constraint).
  */
 export type $GreedySafeParseResult<T> =
-  | { success: true; partial: false; data: T; error?: never; warnings?: never }
+  | { success: true; partial: false; data: T; error?: never }
   | {
       success: true;
       partial: true;
       data: unknown;
-      warnings: errors.$ZodError;
-      error?: never;
+      error: errors.$ZodError;
     }
-  | { success: false; data?: never; error: errors.$ZodError; warnings?: never };
+  | { success: false; data?: never; error: errors.$ZodError };
 
 export type $GreedySafeParse = <T extends schemas.$ZodType>(
   schema: T,
@@ -145,7 +144,7 @@ export const _greedySafeParse: (_Err: $ZodErrorClass) => $GreedySafeParse = (_Er
       success: true,
       partial: true,
       data: result.value,
-      warnings: new (_Err ?? errors.$ZodError)(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
+      error: new (_Err ?? errors.$ZodError)(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
     };
   }
   return {
@@ -182,7 +181,7 @@ export const _greedySafeParseAsync: (_Err: $ZodErrorClass) => $GreedySafeParseAs
         success: true,
         partial: true,
         data: result.value,
-        warnings: new _Err(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
+        error: new _Err(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
       };
     }
     return {
