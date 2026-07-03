@@ -3,6 +3,8 @@ export {
   safeParse,
   parseAsync,
   safeParseAsync,
+  greedySafeParse,
+  greedySafeParseAsync,
   encode,
   decode,
   encodeAsync,
