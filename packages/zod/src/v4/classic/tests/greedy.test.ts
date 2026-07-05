@@ -81,6 +81,28 @@ test("greedySafeParse: root type mismatch is a hard failure", () => {
   expect(result.error.issues[0].code).toBe("invalid_type");
 });
 
+test("greedySafeParse: a hard failure still exposes whatever partial value was assembled as `data`", () => {
+  // Sibling fields unrelated to the one that failed are still useful to a caller
+  // that wants to salvage them (e.g. wiring up error-tracking listeners from a
+  // still-valid field before re-throwing) even though the object overall failed.
+  const schema = z.object({ a: z.number(), sibling: z.string() });
+  const result = schema.greedySafeParse({ a: "bad", sibling: "still here" });
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect((result.data as any).sibling).toBe("still here");
+  expect((result.data as any).a).toBeUndefined();
+});
+
+test("greedySafeParse: root type mismatch's `data` is just the original raw input", () => {
+  const schema = z.object({ a: z.number() });
+  const result = schema.greedySafeParse("not-an-object");
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.data).toBe("not-an-object");
+});
+
 // ---------------------------------------------------------------------------
 // Object — default behaviour unchanged (safeParse still throws on any error)
 // ---------------------------------------------------------------------------

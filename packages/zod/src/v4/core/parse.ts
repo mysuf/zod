@@ -106,7 +106,15 @@ export const safeParseAsync: $SafeParseAsync = /* @__PURE__*/ _safeParseAsync(er
  * - `success: true, partial: true`  — partially valid; `data` contains only
  *   the fields/elements that passed, `error` lists everything that failed.
  * - `success: false`                — hard failure (e.g. root type mismatch,
- *   or an array where every element failed a `nonempty()` constraint).
+ *   an array where every element failed a `nonempty()` constraint, or a
+ *   required field with nothing salvageable). `data` still carries whatever
+ *   partial value was assembled before the failure was detected — for a
+ *   root-type mismatch this is just the original raw input; for a nested
+ *   required-field escalation it's the rest of the object's fields that DID
+ *   validate (e.g. sibling fields unrelated to the one that failed). Callers
+ *   that only care about the failure can ignore it; callers that want to
+ *   salvage independent, still-valid data (e.g. wiring up tracking listeners
+ *   before re-throwing) can use it.
  */
 export type $GreedySafeParseResult<T> =
   | { success: true; partial: false; data: T; error?: never }
@@ -116,7 +124,7 @@ export type $GreedySafeParseResult<T> =
       data: unknown;
       error: errors.$ZodError;
     }
-  | { success: false; data?: never; error: errors.$ZodError };
+  | { success: false; data: unknown; error: errors.$ZodError };
 
 export type $GreedySafeParse = <T extends schemas.$ZodType>(
   schema: T,
@@ -136,6 +144,7 @@ export const _greedySafeParse: (_Err: $ZodErrorClass) => $GreedySafeParse = (_Er
   if (result.greedyFailed) {
     return {
       success: false,
+      data: result.value,
       error: new (_Err ?? errors.$ZodError)(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
     };
   }
@@ -173,6 +182,7 @@ export const _greedySafeParseAsync: (_Err: $ZodErrorClass) => $GreedySafeParseAs
     if (result.greedyFailed) {
       return {
         success: false,
+        data: result.value,
         error: new _Err(result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
       };
     }
