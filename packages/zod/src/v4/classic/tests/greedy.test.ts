@@ -233,6 +233,61 @@ test("greedySafeParse: nested objects — invalid inner field omitted, outer obj
 });
 
 // ---------------------------------------------------------------------------
+// Union / discriminated union — total mismatch is a hard failure
+// ---------------------------------------------------------------------------
+
+test("greedySafeParse: union with no matching branch is a hard failure", () => {
+  const schema = z.union([z.string(), z.number()]);
+  const result = schema.greedySafeParse(true);
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues[0].code).toBe("invalid_union");
+});
+
+test("greedySafeParse: discriminated union with unrecognized discriminator is a hard failure", () => {
+  const schema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("a"), a: z.number() }),
+    z.object({ type: z.literal("b"), b: z.string() }),
+  ]);
+  const result = schema.greedySafeParse({ type: "c", a: 1 });
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues[0].code).toBe("invalid_union");
+});
+
+test("greedySafeParse: discriminated union with missing discriminator is a hard failure", () => {
+  const schema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("a"), a: z.number() }),
+    z.object({ type: z.literal("b"), b: z.string() }),
+  ]);
+  const result = schema.greedySafeParse({ a: 1 });
+
+  expect(result.success).toBe(false);
+});
+
+test("greedySafeParse: discriminated union root type mismatch is a hard failure", () => {
+  const schema = z.discriminatedUnion("type", [z.object({ type: z.literal("a"), a: z.number() })]);
+  const result = schema.greedySafeParse("not-an-object");
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues[0].code).toBe("invalid_type");
+});
+
+test("greedySafeParse: discriminated union with matching discriminator still salvages sibling fields", () => {
+  const schema = z.discriminatedUnion("type", [z.object({ type: z.literal("a"), a: z.number(), b: z.string() })]);
+  const result = schema.greedySafeParse({ type: "a", a: "bad", b: "hello" });
+
+  expect(result.success).toBe(true);
+  if (!result.success) return;
+  expect(result.partial).toBe(true);
+  expect((result.data as any).b).toBe("hello");
+  expect((result.data as any).a).toBeUndefined();
+});
+
+// ---------------------------------------------------------------------------
 // Standalone z.greedySafeParse function
 // ---------------------------------------------------------------------------
 

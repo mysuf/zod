@@ -2264,6 +2264,9 @@ function handleUnionResults(results: ParsePayload[], final: ParsePayload, inst: 
     inst,
     errors: results.map((result) => result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config()))),
   });
+  // In greedy mode, no branch matched — there is no partial value to salvage
+  // from a union, so this is always a hard failure.
+  if (ctx?.greedy) final.greedyFailed = true;
 
   return final;
 }
@@ -2358,6 +2361,9 @@ function handleExclusiveUnionResults(
       inclusive: false,
     });
   }
+  // In greedy mode, either no branch matched or more than one did — there is
+  // no unambiguous partial value to salvage, so this is always a hard failure.
+  if (ctx?.greedy) final.greedyFailed = true;
 
   return final;
 }
@@ -2487,6 +2493,8 @@ export const $ZodDiscriminatedUnion: core.$constructor<$ZodDiscriminatedUnion> =
           input,
           inst,
         });
+        // In greedy mode a root type mismatch is always a hard failure.
+        if (ctx?.greedy) payload.greedyFailed = true;
         return payload;
       }
 
@@ -2514,6 +2522,9 @@ export const $ZodDiscriminatedUnion: core.$constructor<$ZodDiscriminatedUnion> =
         path: [def.discriminator],
         inst,
       });
+      // In greedy mode, an unrecognized/missing discriminator means no branch
+      // can even be attempted — this is always a hard failure.
+      if (ctx?.greedy) payload.greedyFailed = true;
 
       return payload;
     };
