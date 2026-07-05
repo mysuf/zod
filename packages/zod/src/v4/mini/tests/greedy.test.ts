@@ -6,8 +6,17 @@ import * as z from "zod/mini";
 // the shared core implementation. These tests only verify the zod/mini
 // wiring: instance methods, standalone functions, and the async variant.
 
-test("greedySafeParse: object with one invalid field omits it, collects error", () => {
+test("greedySafeParse: object with one invalid REQUIRED field is a hard failure", () => {
   const schema = z.object({ a: z.number(), b: z.string() });
+  const result = schema.greedySafeParse({ a: "not-a-number", b: "hello" });
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues[0].path).toEqual(["a"]);
+});
+
+test("greedySafeParse: object with one invalid OPTIONAL field omits it, collects error", () => {
+  const schema = z.object({ a: z.optional(z.number()), b: z.string() });
   const result = schema.greedySafeParse({ a: "not-a-number", b: "hello" });
 
   expect(result.success).toBe(true);
@@ -19,14 +28,11 @@ test("greedySafeParse: object with one invalid field omits it, collects error", 
   expect(result.error!.issues[0].path).toEqual(["a"]);
 });
 
-test("greedySafeParseAsync: same behavior as sync variant", async () => {
+test("greedySafeParseAsync: same hard-failure behavior as sync variant for a required field", async () => {
   const schema = z.object({ a: z.number(), b: z.string() });
   const result = await schema.greedySafeParseAsync({ a: "not-a-number", b: "hello" });
 
-  expect(result.success).toBe(true);
-  if (!result.success) return;
-  expect(result.partial).toBe(true);
-  expect((result.data as any).b).toBe("hello");
+  expect(result.success).toBe(false);
 });
 
 test("z.greedySafeParse / z.greedySafeParseAsync standalone functions match instance methods", async () => {

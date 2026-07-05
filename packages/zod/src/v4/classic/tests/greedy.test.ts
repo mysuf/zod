@@ -16,34 +16,37 @@ test("greedySafeParse: object fully valid returns success:true partial:false", (
   expect(result.error).toBeUndefined();
 });
 
-test("greedySafeParse: object with one invalid required field omits field, collects error", () => {
+test("greedySafeParse: object with one invalid required field is a hard failure (required means required)", () => {
   const schema = z.object({ a: z.number(), b: z.string() });
   const result = schema.greedySafeParse({ a: "not-a-number", b: "hello" });
 
-  expect(result.success).toBe(true);
-  if (!result.success) return;
-  expect(result.partial).toBe(true);
-  // invalid field omitted
-  expect((result.data as any).a).toBeUndefined();
-  // valid field present
-  expect((result.data as any).b).toBe("hello");
-  // error recorded with correct path
-  expect(result.error!.issues).toHaveLength(1);
-  expect(result.error!.issues[0].path).toEqual(["a"]);
+  // A required field with nothing salvageable invalidates the whole object —
+  // there is no legitimate value for a mandatory field, unlike an optional
+  // field simply being dropped (see the optional-field tests below).
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues.some((i) => i.path[0] === "a")).toBe(true);
 });
 
-test("greedySafeParse: object with all invalid fields returns partial:true with empty output", () => {
+test("greedySafeParse: object with all invalid required fields is a hard failure", () => {
   const schema = z.object({ a: z.number(), b: z.number() });
   const result = schema.greedySafeParse({ a: "bad", b: "bad" });
 
-  expect(result.success).toBe(true);
-  if (!result.success) return;
-  expect(result.partial).toBe(true);
-  expect(result.data).toEqual({});
-  expect(result.error!.issues).toHaveLength(2);
-  const paths = result.error!.issues.map((i) => i.path[0]);
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues).toHaveLength(2);
+  const paths = result.error.issues.map((i) => i.path[0]);
   expect(paths).toContain("a");
   expect(paths).toContain("b");
+});
+
+test("greedySafeParse: required field entirely missing (key absent) is a hard failure", () => {
+  const schema = z.object({ a: z.number(), b: z.string() });
+  const result = schema.greedySafeParse({ b: "hello" });
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues.some((i) => i.path[0] === "a")).toBe(true);
 });
 
 test("greedySafeParse: optional field absent — no error, not in output", () => {
@@ -193,7 +196,7 @@ test("safeParse (non-greedy): array with any invalid element returns success:fal
 // Nested: object containing array
 // ---------------------------------------------------------------------------
 
-test("greedySafeParse: nested object+array — deep errors collected with full path", () => {
+test("greedySafeParse: nested object+array — a required scalar field failing is a hard failure", () => {
   const schema = z.object({
     name: z.string(),
     scores: z.array(z.number()),
@@ -201,35 +204,63 @@ test("greedySafeParse: nested object+array — deep errors collected with full p
 
   const result = schema.greedySafeParse({ name: 42, scores: [10, "x", 30] });
 
+  // `name` is required and unsalvageable (42 isn't a string) — hard failure,
+  // even though `scores` itself would otherwise happily strip down to [10, 30].
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  const paths = result.error.issues.map((i) => i.path);
+  expect(paths.some((p) => p[0] === "name")).toBe(true);
+});
+
+test("greedySafeParse: array field elements stripping still works when every other required field is valid", () => {
+  const schema = z.object({
+    name: z.string(),
+    scores: z.array(z.number()),
+  });
+
+  const result = schema.greedySafeParse({ name: "ok", scores: [10, "x", 30] });
+
   expect(result.success).toBe(true);
   if (!result.success) return;
   expect(result.partial).toBe(true);
-
-  // name field failed — omitted
-  expect((result.data as any).name).toBeUndefined();
-  // scores array stripped
+  expect((result.data as any).name).toBe("ok");
   expect((result.data as any).scores).toEqual([10, 30]);
-
   const paths = result.error!.issues.map((i) => i.path);
-  // name error
-  expect(paths.some((p) => p[0] === "name")).toBe(true);
-  // scores[1] error
   expect(paths.some((p) => p[0] === "scores" && p[1] === 1)).toBe(true);
 });
 
-test("greedySafeParse: nested objects — invalid inner field omitted, outer object returned", () => {
+test("greedySafeParse: a required field's own required sub-field failing propagates the hard failure up the tree", () => {
+  // user is required; user.id is required within user's own schema. id fails
+  // unsalvageably -> user's own object result becomes greedyFailed -> since
+  // `user` is itself required on the outer schema, that propagates too.
   const schema = z.object({
     user: z.object({ id: z.number(), name: z.string() }),
   });
 
   const result = schema.greedySafeParse({ user: { id: "bad", name: "Alice" } });
 
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues[0].path).toEqual(["user", "id"]);
+});
+
+test("greedySafeParse: propagation stops at the first optional ancestor", () => {
+  // Same inner failure as above, but `user` itself is optional on the outer
+  // schema — the inner object still hard-fails on its own required `id`, but
+  // the outer object simply drops the whole (unsalvageable) `user` field
+  // instead of failing itself, exactly like any other optional-field failure.
+  const schema = z.object({
+    other: z.string(),
+    user: z.optional(z.object({ id: z.number(), name: z.string() })),
+  });
+
+  const result = schema.greedySafeParse({ other: "kept", user: { id: "bad", name: "Alice" } });
+
   expect(result.success).toBe(true);
   if (!result.success) return;
   expect(result.partial).toBe(true);
-  expect((result.data as any).user.name).toBe("Alice");
-  expect((result.data as any).user.id).toBeUndefined();
-  expect(result.error!.issues[0].path).toEqual(["user", "id"]);
+  expect((result.data as any).other).toBe("kept");
+  expect((result.data as any).user).toBeUndefined();
 });
 
 // ---------------------------------------------------------------------------
@@ -276,8 +307,10 @@ test("greedySafeParse: discriminated union root type mismatch is a hard failure"
   expect(result.error.issues[0].code).toBe("invalid_type");
 });
 
-test("greedySafeParse: discriminated union with matching discriminator still salvages sibling fields", () => {
-  const schema = z.discriminatedUnion("type", [z.object({ type: z.literal("a"), a: z.number(), b: z.string() })]);
+test("greedySafeParse: discriminated union with matching discriminator still salvages an invalid OPTIONAL sibling field", () => {
+  const schema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("a"), a: z.optional(z.number()), b: z.string() }),
+  ]);
   const result = schema.greedySafeParse({ type: "a", a: "bad", b: "hello" });
 
   expect(result.success).toBe(true);
@@ -285,6 +318,17 @@ test("greedySafeParse: discriminated union with matching discriminator still sal
   expect(result.partial).toBe(true);
   expect((result.data as any).b).toBe("hello");
   expect((result.data as any).a).toBeUndefined();
+});
+
+test("greedySafeParse: discriminated union with matching discriminator still hard-fails on an invalid REQUIRED sibling field", () => {
+  // Same shape as above, but `a` is required — required means required even
+  // once the correct union branch has already been identified.
+  const schema = z.discriminatedUnion("type", [z.object({ type: z.literal("a"), a: z.number(), b: z.string() })]);
+  const result = schema.greedySafeParse({ type: "a", a: "bad", b: "hello" });
+
+  expect(result.success).toBe(false);
+  if (result.success) return;
+  expect(result.error.issues.some((i) => i.path[0] === "a")).toBe(true);
 });
 
 // ---------------------------------------------------------------------------

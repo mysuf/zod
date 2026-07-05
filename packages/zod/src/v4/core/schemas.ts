@@ -1830,7 +1830,14 @@ function handlePropertyResult(
       //   value, meaning there is nothing to salvage (scalar / wrong root type).
       // Partial structures (objects, arrays) replace payload.value with a new
       // collection, so result.value !== input[key] and they fall through.
-      if (result.greedyFailed || result.value === input[key]) return;
+      if (result.greedyFailed || result.value === input[key]) {
+        // A required field with nothing salvageable invalidates the whole object
+        // in greedy mode: dropping an optional field is a legitimate partial
+        // result, but there is no legitimate value for a missing/unusable
+        // mandatory field, so the containing object can't be salvaged either.
+        if (!isOptionalIn) final.greedyFailed = true;
+        return;
+      }
     }
   }
 
@@ -1843,6 +1850,7 @@ function handlePropertyResult(
         path: [key],
       });
     }
+    if (greedy) final.greedyFailed = true;
     return;
   }
 
